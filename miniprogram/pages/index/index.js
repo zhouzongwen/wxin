@@ -1,120 +1,73 @@
 //index.js
-const app = getApp()
-
+//获取应用实例
+var app = getApp()
+var utils = require('../../utils/util.js')
 Page({
   data: {
-    avatarUrl: './user-unlogin.png',
-    userInfo: {},
-    logged: false,
-    takeSession: false,
-    requestResult: ''
+    list: [],
+    duration: 2000,
+    indicatorDots: true, //  是否显示面板指示点
+    // autoplay: true, // 是否自动切换
+    duration: 500, // 滑动动画时长
+    interval: 3000, // 自动切换时间间隔
+    loading: false,
+    plain: false,
+    circular: true, // 是否采用衔接滑动
+    freeMode:true,
+    current: 0, // 当前所在页面的 index
   },
-
-  onLoad: function() {
-    if (!wx.cloud) {
-      wx.redirectTo({
-        url: '../chooseLib/chooseLib',
-      })
-      return
-    }
-
-    // 获取用户信息
-    wx.getSetting({
-      success: res => {
-        if (res.authSetting['scope.userInfo']) {
-          // 已经授权，可以直接调用 getUserInfo 获取头像昵称，不会弹框
-          wx.getUserInfo({
-            success: res => {
-              this.setData({
-                avatarUrl: res.userInfo.avatarUrl,
-                userInfo: res.userInfo
-              })
-            }
-          })
-        }
+  onLoad () {
+    let that = this
+    wx.request({
+      url: 'http://news-at.zhihu.com/api/4/news/latest',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      success (res) {
+         that.setData({
+           banner: res.data.top_stories,
+           list: [{ header: '今日热闻' }].concat(res.data.stories)
+         })
       }
     })
+    this.index = 1
   },
-
-  onGetUserInfo: function(e) {
-    if (!this.data.logged && e.detail.userInfo) {
+  testDetails (e) {
+    // bindchange事件
+    console.log(e)
+    if (e.detail.source == 'autoplay') {
       this.setData({
-        logged: true,
-        avatarUrl: e.detail.userInfo.avatarUrl,
-        userInfo: e.detail.userInfo
+        autoplay: false
       })
     }
   },
-
-  onGetOpenid: function() {
-    // 调用云函数
-    wx.cloud.callFunction({
-      name: 'login',
-      data: {},
-      success: res => {
-        console.log('[云函数] [login] user openid: ', res.result.openid)
-        app.globalData.openid = res.result.openid
-        wx.navigateTo({
-          url: '../userConsole/userConsole',
-        })
+  //事件处理函数
+  bindViewTap(e) {
+    wx.navigateTo({
+      url: '../detail/detail?id=' + e.target.dataset.id
+    })
+  },
+  loadMore (e) {
+    if (this.data.list.length === 0) return
+    var date = this.getNextDate()
+    var that = this
+    that.setData({ loading: true })
+    wx.request({
+      url: 'http://news.at.zhihu.com/api/4/news/before/' + (Number(utils.formatDate(date)) + 1),
+      headers: {
+        'Content-Type': 'application/json'
       },
-      fail: err => {
-        console.error('[云函数] [login] 调用失败', err)
-        wx.navigateTo({
-          url: '../deployFunctions/deployFunctions',
-        })
+      success (res) {
+          that.setData({
+            loading: false,
+            list: that.data.list.concat([{ header: utils.formatDate(date, '-') }]).concat(res.data.stories)
+          })
       }
     })
   },
-
-  // 上传图片
-  doUpload: function () {
-    // 选择图片
-    wx.chooseImage({
-      count: 1,
-      sizeType: ['compressed'],
-      sourceType: ['album', 'camera'],
-      success: function (res) {
-
-        wx.showLoading({
-          title: '上传中',
-        })
-
-        const filePath = res.tempFilePaths[0]
-        
-        // 上传图片
-        const cloudPath = 'my-image' + filePath.match(/\.[^.]+?$/)[0]
-        wx.cloud.uploadFile({
-          cloudPath,
-          filePath,
-          success: res => {
-            console.log('[上传文件] 成功：', res)
-
-            app.globalData.fileID = res.fileID
-            app.globalData.cloudPath = cloudPath
-            app.globalData.imagePath = filePath
-            
-            wx.navigateTo({
-              url: '../storageConsole/storageConsole'
-            })
-          },
-          fail: e => {
-            console.error('[上传文件] 失败：', e)
-            wx.showToast({
-              icon: 'none',
-              title: '上传失败',
-            })
-          },
-          complete: () => {
-            wx.hideLoading()
-          }
-        })
-
-      },
-      fail: e => {
-        console.error(e)
-      }
-    })
+  getNextDate (){
+    const now = new Date()
+    now.setDate(now.getDate() - this.index++)
+    return now
   },
-
 })
