@@ -10,7 +10,7 @@
     </block>
   </swiper>
   <view class="news-item-container">
-    <block wx:for="{{list}}" wx:for-index="id">
+    <block wx:for="{{list}}" wx:key="index">
       <text wx:if="{{item.header}}" class="sub-title">{{item.header}}</text>
       <navigator wx:else url="../detail/detail?id={{item.id}}">
         <view class="news-item" >
